@@ -51,6 +51,7 @@ I integrated Email notification script using Groovy to send alerts when the pipe
 This project demonstrates a complete **CI/CD pipeline** setup for deploying a full-stack blogging application, integrating modern tools like Jenkins, SonarQube, Nexus, Docker, Kubernetes (EKS), and Prometheus for monitoring. This repository showcases the **automation of code quality checks, artifact management, application deployment, and monitoring** in a production-like environment.
 
 ## Key Technologies & Tools
+- Java 21: Application runtime and language version used to build the blogging app.
 - Jenkins: Continuous Integration and Continuous Deployment.
 - SonarQube: Static code analysis for quality and security checks.
 - Nexus: Artifact repository manager.
@@ -75,7 +76,7 @@ This project demonstrates a complete **CI/CD pipeline** setup for deploying a fu
 
 1. **GitHub Integration**: Jenkins pulls the latest changes from the GitHub repository and triggers the pipeline.
 2. **Build & Test**:
-   - The code is compiled and built using Maven.
+   - The code is compiled and built using Maven with Java 21 (JDK 21).
    - Code analysis is done using SonarQube.
    - Trivy scans for vulnerabilities.
 3. **Docker & Nexus**:
@@ -103,6 +104,7 @@ cd full-stack-blogging-app
 ./ci-scripts/install_jenkins.sh 
 ```
 - Configure Jenkins with plugins for Docker, SonarQube, Maven, and Kubernetes.
+- Install JDK 21 on the Jenkins server and configure it under **Manage Jenkins → Tools → JDK installations** as `jdk` (this name is referenced by the `Jenkinsfile`).
 
 ### 3. Set up Kubernetes (EKS)
 - Deploy the EKS cluster using Terraform:

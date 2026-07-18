@@ -1,4 +1,7 @@
 ### Full-Stack Blog App
+
+**Status: ✅ Complete** — the CI/CD pipeline is live and triggers automatically on every push to `main`.
+
 ```
 Job Scenario:
 Setting up a CI/CD pipeline for a full-stack blogging (Twitter-style) app hosted on GitHub.
@@ -29,7 +32,7 @@ Docker for containerizing and publishing the application to Docker Hub.
 ---
 
 ## Project Overview
-This project demonstrates a CI/CD pipeline for a full-stack blogging application, using **Jenkins**, **SonarQube**, and **Docker**. Jenkins pulls the latest code, compiles and packages it with Maven, runs static analysis through SonarQube, then builds and pushes a Docker image to Docker Hub.
+This project demonstrates a complete CI/CD pipeline for a full-stack blogging application, using **Jenkins**, **SonarQube**, and **Docker**. A GitHub webhook triggers Jenkins automatically on every push; Jenkins then pulls the latest code, compiles and packages it with Maven, runs static analysis through SonarQube, and builds and pushes a Docker image to Docker Hub — ready to run anywhere.
 
 ## Key Technologies & Tools
 - **Java 21** — application runtime and language version.
@@ -51,6 +54,13 @@ The pipeline currently runs these stages, in order:
 6. **Docker Push Image** — pushes the built image to Docker Hub.
 
 > Kubernetes deployment (`deployment-service.yml`) and EKS provisioning (`EKS_Terraform/`) exist in the repo but are **not yet automated** in the Jenkinsfile — they're applied manually via `kubectl`/`terraform` for now.
+
+## CI/CD Trigger (GitHub Webhook)
+The pipeline runs automatically on every push to `main` — no manual trigger needed.
+
+- **Jenkins job → Configure → Build Triggers**: `GitHub hook trigger for GITScm polling` is enabled.
+- **GitHub repo → Settings → Webhooks**: a webhook posts to `http://<jenkins-host>:8080/github-webhook/` (Content type: `application/json`, event: `push`).
+- Check delivery status any time under the webhook's **Recent Deliveries** tab in GitHub.
 
 ## Jenkins Setup
 

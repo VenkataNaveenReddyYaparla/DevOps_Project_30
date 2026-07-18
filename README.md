@@ -62,13 +62,99 @@ The pipeline runs automatically on every push to `main` — no manual trigger ne
 - **GitHub repo → Settings → Webhooks**: a webhook posts to `http://<jenkins-host>:8080/github-webhook/` (Content type: `application/json`, event: `push`).
 - Check delivery status any time under the webhook's **Recent Deliveries** tab in GitHub.
 
+## EC2 Host Setup (Ubuntu)
+The Jenkins server is a plain Ubuntu EC2 instance. These are the actual scripts used to provision it.
+
+### 1. Install Jenkins (`jenkinsinstallation.sh`)
+```bash
+#!/bin/bash
+
+# Update system packages
+sudo apt-get update -y
+
+# Install Java (Jenkins requires Java to run)
+sudo apt-get install -y openjdk-11-jdk
+
+# Import Jenkins GPG key and add Jenkins apt repository
+curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo tee \
+  /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+# Update package lists to include Jenkins repository
+sudo apt-get update -y
+
+# Install Jenkins
+sudo apt-get install -y jenkins
+
+# Start Jenkins
+sudo systemctl start jenkins
+
+# Enable Jenkins to start at boot
+sudo systemctl enable jenkins
+
+echo "Jenkins installed successfully! Access it at http://<your-server-ip>:8080"
+echo "Retrieve the initial admin password with: sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+```
+> `openjdk-11-jdk` here is only the Java version Jenkins itself runs on — it's unrelated to the JDK the pipeline compiles the app with. The app's own build JDK (`JDK 21`) is configured separately in Jenkins under **Manage Jenkins → Tools** (see below).
+
+### 2. Install Docker (`dockerinstall.sh`)
+```bash
+#!/bin/bash
+
+# Update existing list of packages
+sudo apt-get update
+
+# Install prerequisite packages
+sudo apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+# Add Docker official GPG key
+sudo mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+# Set up the Docker stable repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update the package index again
+sudo apt-get update
+
+# Install Docker Engine, CLI, and containerd
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker
+sudo systemctl start docker
+
+# Enable Docker to start on boot
+sudo systemctl enable docker
+
+# Verify Docker installation
+sudo docker --version
+
+# Add current user to the Docker group to avoid using sudo (optional)
+sudo usermod -aG docker $USER
+
+echo "Docker installation completed. Please log out and log back in to apply the group changes."
+```
+> Jenkins itself also runs `docker` commands (in the pipeline's Docker Build/Push stages) as the `jenkins` user — that user needs to be in the `docker` group too: `sudo usermod -aG docker jenkins && sudo systemctl restart jenkins`.
+
+### 3. Run SonarQube
+SonarQube runs as a container on the same host:
+```bash
+docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
+```
+Access it at `http://<server-ip>:9000` (default login `admin` / `admin`, prompted to change on first login). Generate an analysis token under **My Account → Security** for Jenkins to use.
+
 ## Jenkins Setup
 
-### 1. Install Jenkins & Docker on the host
-- Jenkins (RHEL/Amazon Linux, via `pkg.jenkins.io` repo) with `java-21-openjdk` as a prerequisite.
-- Docker Engine on Ubuntu via `install_docker.sh` (adds the official Docker apt repo, installs `docker-ce`, enables the service, adds the Jenkins/deploy user to the `docker` group).
-
-### 2. Configure Tools (**Manage Jenkins → Tools**)
+### 1. Configure Tools (**Manage Jenkins → Tools**)
 These names must match exactly what the `Jenkinsfile` references (Jenkins tool names are case-sensitive):
 
 | Tool | Name used in Jenkinsfile | Notes |
@@ -77,12 +163,12 @@ These names must match exactly what the `Jenkinsfile` references (Jenkins tool n
 | Maven | `Maven` | Install automatically → *Install from Apache* → pick a 3.9.x version. |
 | SonarQube Scanner | `sonar-scanner` | Referenced via `tool 'sonar-scanner'` in the `environment` block; install automatically from the SonarQube Scanner installer. |
 
-### 3. Configure the SonarQube server (**Manage Jenkins → System → SonarQube servers**)
+### 2. Configure the SonarQube server (**Manage Jenkins → System → SonarQube servers**)
 - **Name**: must match the string passed to `withSonarQubeEnv(...)` in the Jenkinsfile (currently `sonarqubeserver`).
-- **Server URL**: your SonarQube instance URL.
-- **Server authentication token**: a Secret Text credential holding a SonarQube user/analysis token (generate under SonarQube → *My Account → Security → Generate Tokens*).
+- **Server URL**: your SonarQube instance URL, e.g. `http://localhost:9000` if SonarQube runs on the same host as Jenkins.
+- **Server authentication token**: a Secret Text credential holding the SonarQube token generated in step 3 above (*My Account → Security → Generate Tokens*).
 
-### 4. Configure credentials (**Manage Jenkins → Credentials**)
+### 3. Configure credentials (**Manage Jenkins → Credentials**)
 | Credential ID | Kind | Used for |
 |---|---|---|
 | `dockertoken` | Username with password (Docker Hub username + access token) | `withDockerRegistry` in the Docker Build/Push stages |
@@ -109,13 +195,6 @@ Then open `http://<host-ip>:8880/register` to create an account, and log in at `
 - The app uses an **in-memory H2 database** (`spring.datasource.url=jdbc:h2:mem:...`) — there is no seeded/default user, and all data (including registered accounts) is wiped whenever the container restarts.
 - Remember to open the chosen host port (e.g. `8880`) in the EC2 **Security Group** if accessing from outside the instance.
 - If a container with the same name already exists, remove it first: `docker rm -f devops30`.
-
-## SonarQube Server
-For local/dev setups, SonarQube itself can run as a container on the same Jenkins host:
-```bash
-docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
-```
-Then point the Jenkins SonarQube server config at `http://<host-ip>:9000` (or `http://localhost:9000` if Jenkins and SonarQube run on the same box).
 
 ## Troubleshooting
 Issues hit while setting this pipeline up, and how they were resolved:

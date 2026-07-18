@@ -1,153 +1,127 @@
-### Full-Stack Blog App 
+### Full-Stack Blog App
 ```
 Job Scenario:
-I was tasked with setting up a CI/CD pipeline for a full-stack blogging app hosted on GitHub.
-The project involves integrating Jenkins for build and deployment, using SonarQube for code quality checks,
-Nexus for artifact management, and Docker for containerizing the application.
-Once deployed, we will monitor the application using Prometheus, Blackbox Exporter, and visualize it with Grafana.
-I integrated Email notification script using Groovy to send alerts when the pipeline fails or succeeds. 
+Setting up a CI/CD pipeline for a full-stack blogging (Twitter-style) app hosted on GitHub.
+The pipeline uses Jenkins for build automation, SonarQube for static code analysis, and
+Docker for containerizing and publishing the application to Docker Hub.
 ```
-
-![1_9CvhrnA6Fg1LTmMjr3n3Kg](https://github.com/user-attachments/assets/837ea1ca-f69e-40a1-b4ee-15ace4dc3892)
 
 ---
 
-### Project Structure.
+### Project Structure
 
-``` 
+```
 /full-stack-blogging-app
-├── /ci-scripts
-│   ├── install_jenkins.sh
-│   ├── install_docker.sh
-│   ├── install_blackbox.sh
-│   ├── prometheus.yml
-│   └── grafana_dashboard.json
-├── /kubernetes
-│   ├── deployment.yml
-│   ├── service.yml
-│   ├── role.yaml
-│   ├── rolebinding.yaml
-│   └── serviceaccount.yaml
-├── /terraform
+├── EKS_Terraform/          # Terraform IaC for an EKS cluster (provisioned manually, not yet wired into Jenkins)
 │   ├── main.tf
 │   ├── variables.tf
-│   ├── outputs.tf
-├── /src
-│   ├── app.js
-│   ├── Dockerfile
-│   └── ...
-├── README.md
+│   └── output.tf
+├── src/                     # Application source (Spring Boot, Java 21)
+├── Dockerfile               # Container build definition for the app
+├── deployment-service.yml   # Kubernetes Deployment + Service manifest
+├── RBAC.md                  # Notes on Kubernetes RBAC setup for deployments
+├── install_docker.sh        # Docker Engine install script (Ubuntu)
+├── Jenkinsfile              # Main CI/CD pipeline definition
+├── pom.xml                  # Maven build config (Java 21)
+└── README.md
 ```
 
 ---
-
-####
----
-
-```markdown
-# Full-Stack Blogging App CI/CD Project 🚀
 
 ## Project Overview
-This project demonstrates a complete **CI/CD pipeline** setup for deploying a full-stack blogging application, integrating modern tools like Jenkins, SonarQube, Nexus, Docker, Kubernetes (EKS), and Prometheus for monitoring. This repository showcases the **automation of code quality checks, artifact management, application deployment, and monitoring** in a production-like environment.
+This project demonstrates a CI/CD pipeline for a full-stack blogging application, using **Jenkins**, **SonarQube**, and **Docker**. Jenkins pulls the latest code, compiles and packages it with Maven, runs static analysis through SonarQube, then builds and pushes a Docker image to Docker Hub.
 
 ## Key Technologies & Tools
-- Java 21: Application runtime and language version used to build the blogging app.
-- Jenkins: Continuous Integration and Continuous Deployment.
-- SonarQube: Static code analysis for quality and security checks.
-- Nexus: Artifact repository manager.
-- Docker: Containerization of the application.
-- Kubernetes (EKS): Orchestration of containerized applications.
-- Prometheus & Grafana: Monitoring and visualization of application performance.
-- Blackbox Exporter: Probing application availability and uptime monitoring.
+- **Java 21** — application runtime and language version.
+- **Maven** — build tool (compile, package).
+- **Jenkins** — CI/CD orchestration.
+- **SonarQube** — static code analysis for quality and security checks.
+- **Docker** — containerizes the application and publishes it to Docker Hub.
+- **Terraform / EKS** (`EKS_Terraform/`) — infrastructure-as-code for provisioning an EKS cluster; currently provisioned separately from the Jenkins pipeline.
 
-## Objectives
-1. Automate the CI/CD pipeline: Automate building, testing, and deploying the blogging app.
-2. Enhance code quality and security: Use SonarQube for static code analysis and Trivy for vulnerability scans.
-3. Deploy to Kubernetes (EKS): Use Terraform to deploy and manage Kubernetes infrastructure on AWS.
-4. Monitor the application: Use Prometheus, Blackbox Exporter, and Grafana for real-time monitoring and alerting.
+## CI/CD Pipeline (`Jenkinsfile`)
 
-## Repository Structure
-- `/ci-scripts`: Shell scripts for installing Jenkins, Docker, Prometheus, Grafana, and Blackbox Exporter.
-- `/kubernetes`: Kubernetes manifests for deploying the app and setting up roles and access.
-- `/terraform`: Infrastructure as Code (IaC) files to provision an EKS cluster.
-- `/src`: The source code and Dockerfile for the blogging application.
+The pipeline currently runs these stages, in order:
 
-## CI/CD Pipeline Overview
+1. **Git Checkout** — pulls the `main` branch from the GitHub repo.
+2. **Compile** — `mvn compile`, using the configured JDK/Maven tools.
+3. **SonarQube Analysis** — runs `sonar-scanner` against the configured SonarQube server.
+4. **Build** — `mvn package`, produces the Spring Boot jar.
+5. **Docker Build & Tag** — builds the app image (`naveenreddy9/devops_30`) using Docker Hub credentials.
+6. **Docker Push Image** — pushes the built image to Docker Hub.
 
-1. **GitHub Integration**: Jenkins pulls the latest changes from the GitHub repository and triggers the pipeline.
-2. **Build & Test**:
-   - The code is compiled and built using Maven with Java 21 (JDK 21).
-   - Code analysis is done using SonarQube.
-   - Trivy scans for vulnerabilities.
-3. **Docker & Nexus**:
-   - Jenkins builds a Docker image for the application.
-   - The image is tagged and pushed to DockerHub.
-   - Artifacts are pushed to Nexus.
-4. **Kubernetes Deployment**:
-   - The app is deployed to an EKS cluster.
-   - Kubernetes handles scaling and service management.
-5. **Monitoring**:
-   - Prometheus scrapes metrics from the Blackbox Exporter.
-   - Grafana visualizes application uptime, health, and other critical metrics.
+> Kubernetes deployment (`deployment-service.yml`) and EKS provisioning (`EKS_Terraform/`) exist in the repo but are **not yet automated** in the Jenkinsfile — they're applied manually via `kubectl`/`terraform` for now.
 
-## Steps to Reproduce the Project
+## Jenkins Setup
 
-### 1. Clone the Repository
+### 1. Install Jenkins & Docker on the host
+- Jenkins (RHEL/Amazon Linux, via `pkg.jenkins.io` repo) with `java-21-openjdk` as a prerequisite.
+- Docker Engine on Ubuntu via `install_docker.sh` (adds the official Docker apt repo, installs `docker-ce`, enables the service, adds the Jenkins/deploy user to the `docker` group).
+
+### 2. Configure Tools (**Manage Jenkins → Tools**)
+These names must match exactly what the `Jenkinsfile` references (Jenkins tool names are case-sensitive):
+
+| Tool | Name used in Jenkinsfile | Notes |
+|---|---|---|
+| JDK | `JDK 21` | Either auto-installed (Install automatically → Add Installer → *Install from adoptium.net* → pick a JDK 21 build), or point `JAVA_HOME` at an existing install, e.g. `/usr/lib/jvm/java-21-openjdk-amd64`. |
+| Maven | `Maven` | Install automatically → *Install from Apache* → pick a 3.9.x version. |
+| SonarQube Scanner | `sonar-scanner` | Referenced via `tool 'sonar-scanner'` in the `environment` block; install automatically from the SonarQube Scanner installer. |
+
+### 3. Configure the SonarQube server (**Manage Jenkins → System → SonarQube servers**)
+- **Name**: must match the string passed to `withSonarQubeEnv(...)` in the Jenkinsfile (currently `sonarqubeserver`).
+- **Server URL**: your SonarQube instance URL.
+- **Server authentication token**: a Secret Text credential holding a SonarQube user/analysis token (generate under SonarQube → *My Account → Security → Generate Tokens*).
+
+### 4. Configure credentials (**Manage Jenkins → Credentials**)
+| Credential ID | Kind | Used for |
+|---|---|---|
+| `dockertoken` | Username with password (Docker Hub username + access token) | `withDockerRegistry` in the Docker Build/Push stages |
+| SonarQube token credential | Secret text | Bound to the SonarQube server config above |
+
+## Steps to Reproduce
 ```bash
-git clone https://github.com/ougabriel/full-stack-blogging-app.git
-cd full-stack-blogging-app
+git clone https://github.com/VenkataNaveenReddyYaparla/DevOps_Project_30.git
+cd DevOps_Project_30
 ```
+1. Provision a Jenkins host and install Jenkins + Docker (see above).
+2. Configure the Tools, SonarQube server, and Credentials as described above.
+3. Create a Jenkins Pipeline job pointing at this repo's `Jenkinsfile`.
+4. Run the pipeline — it checks out, compiles, analyzes, packages, and publishes the Docker image.
 
-### 2. Setup CI/CD Pipeline with Jenkins
-- Install Jenkins using the provided script:
+## Running the App Manually
+After the pipeline pushes the image to Docker Hub, you can run it standalone on any Docker host:
 ```bash
-./ci-scripts/install_jenkins.sh 
+docker pull naveenreddy9/devops_30:latest
+docker run -d --name devops30 -p 8880:8080 naveenreddy9/devops_30:latest
 ```
-- Configure Jenkins with plugins for Docker, SonarQube, Maven, and Kubernetes.
-- Install JDK 21 on the Jenkins server and configure it under **Manage Jenkins → Tools → JDK installations** as `jdk` (this name is referenced by the `Jenkinsfile`).
+Then open `http://<host-ip>:8880/register` to create an account, and log in at `http://<host-ip>:8880/login` with those credentials.
 
-### 3. Set up Kubernetes (EKS)
-- Deploy the EKS cluster using Terraform:
+- The app uses an **in-memory H2 database** (`spring.datasource.url=jdbc:h2:mem:...`) — there is no seeded/default user, and all data (including registered accounts) is wiped whenever the container restarts.
+- Remember to open the chosen host port (e.g. `8880`) in the EC2 **Security Group** if accessing from outside the instance.
+- If a container with the same name already exists, remove it first: `docker rm -f devops30`.
+
+## SonarQube Server
+For local/dev setups, SonarQube itself can run as a container on the same Jenkins host:
 ```bash
-cd terraform
-terraform init
-terraform apply --auto-approve
+docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
 ```
-- Apply Kubernetes manifests to deploy the application:
-```bash
-kubectl apply -f kubernetes/deployment.yml
-```
+Then point the Jenkins SonarQube server config at `http://<host-ip>:9000` (or `http://localhost:9000` if Jenkins and SonarQube run on the same box).
 
-### 4. Setup Monitoring with Prometheus and Grafana
-- Install Prometheus and Grafana using the provided scripts:
-```bash
-./ci-scripts/install_blackbox.sh
-./ci-scripts/install_prometheus.sh
-```
-- Access Grafana and Prometheus through the browser:
-  - Grafana: `http://<your-server-ip>:3000`
-  - Prometheus: `http://<your-server-ip>:9090`
+## Troubleshooting
+Issues hit while setting this pipeline up, and how they were resolved:
 
-## Key Pipeline Stages
-1. Git Checkout: Pulls the latest code from GitHub.
-2. Build & Analysis: Maven builds the app, SonarQube analyzes the code.
-3. Vulnerability Scan: Trivy scans the Docker image for vulnerabilities.
-4. Docker Build & Push: Builds a Docker image and pushes it to DockerHub.
-5. Deploy to EKS: Deploys the app to the Kubernetes cluster.
-6. Monitor: Monitors uptime and performance using Prometheus and Grafana.
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Tool type "jdk"/"maven" does not have an install ... configured` | Jenkinsfile tool names didn't match the names configured under Manage Jenkins → Tools | Make the `tools { jdk ...; maven ... }` names in the Jenkinsfile match the Tools page exactly (case-sensitive) |
+| `error: release version 17 not supported` | JDK tool had "Install automatically" checked but no installer configured, so Jenkins fell back to an older system Java | Add an installer (Adoptium/Temurin 21) under the JDK tool, or set `JAVA_HOME` to a real JDK 21 path on the host |
+| `... doesn't look like a JDK directory` | Manually-entered `JAVA_HOME` pointed at a non-existent or unreadable path | Confirm the exact path via `ls /usr/lib/jvm/` on the host, or switch to auto-install instead of a manual path |
+| `SonarQube installation ... does not match any configured installation` | Name in `withSonarQubeEnv(...)` didn't match the SonarQube server name under Manage Jenkins → System | Make both names match exactly |
+| `Not authorized. Please check sonar.login and sonar.password` | The SonarQube token credential was invalid/expired | Generate a new token in SonarQube (My Account → Security) and update the Jenkins credential |
+| `Could not find credentials matching dockertoken` | No credential with ID `dockertoken` existed (or was deleted/renamed) | Create a **Username with password** credential — username = Docker Hub username, password = Docker Hub access token — with ID `dockertoken` |
+| `permission denied ... unix:///var/run/docker.sock` | The user running `docker` (e.g. `jenkins`, or an interactive shell user) isn't in the `docker` group | `sudo usermod -aG docker <user>`, then restart the service (`sudo systemctl restart jenkins`) or start a new shell session (`newgrp docker`) |
+| Root filesystem near full after increasing the EBS volume size | Resizing the EBS volume in AWS doesn't automatically resize the OS partition/filesystem | `sudo growpart /dev/nvme0n1 1` then `sudo resize2fs /dev/nvme0n1p1` (device names vary — check with `lsblk`) |
 
-## Project Highlights
-- Full CI/CD Automation: Automates the entire software development lifecycle, from code commit to deployment.
-- Real-Time Monitoring: Integrates a comprehensive monitoring system using Prometheus and Grafana to ensure the app's health.
-- Security-Focused: Static code analysis via SonarQube and vulnerability scans via Trivy ensure high code quality and security.
-
-## Demonstration
-Check out the [full blog post](https://medium.com/@ougabriel/cicd-project-production-level-blog-app-deployment-using-eks-nexus-sonarqube-trivy-with-40eb648a688a) about the CI/CD project!
-
-
----
+**Never commit tokens/passwords into files tracked by git.** `installation_notes.txt` is intentionally untracked (see `.gitignore`) since it's used as a personal scratch file for install notes.
 
 ## Contact
-If you have any questions or suggestions, feel free to contact me at [ougabriel@gmail.com](mailto:ougabriel@gmail.com).
-
-```
+Maintained by Venkata Naveen Reddy Yaparla.

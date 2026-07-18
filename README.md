@@ -145,12 +145,29 @@ echo "Docker installation completed. Please log out and log back in to apply the
 ```
 > Jenkins itself also runs `docker` commands (in the pipeline's Docker Build/Push stages) as the `jenkins` user — that user needs to be in the `docker` group too: `sudo usermod -aG docker jenkins && sudo systemctl restart jenkins`.
 
-### 3. Run SonarQube
-SonarQube runs as a container on the same host:
+### 3. Install SonarQube (`sonarqubeinstall.sh`)
+SonarQube runs as a Docker container on the same host. Its bundled Elasticsearch needs a higher `vm.max_map_count` than the Linux default, or the container exits immediately on startup.
 ```bash
+#!/bin/bash
+
+# SonarQube's embedded Elasticsearch requires these, or the container
+# fails at startup with "max virtual memory areas vm.max_map_count is too low"
+sudo sysctl -w vm.max_map_count=262144
+sudo sysctl -w fs.file-max=131072
+
+# Persist across reboots
+echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+echo "fs.file-max=131072" | sudo tee -a /etc/sysctl.conf
+
+# Run SonarQube (Community Edition)
 docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
+
+echo "SonarQube starting up. Access it at http://<server-ip>:9000"
+echo "Default login: admin / admin (you'll be prompted to change it on first login)"
 ```
-Access it at `http://<server-ip>:9000` (default login `admin` / `admin`, prompted to change on first login). Generate an analysis token under **My Account → Security** for Jenkins to use.
+After logging in, generate a token under **My Account → Security → Generate Tokens** — this is what gets pasted into the Jenkins SonarQube credential (step 2 below).
+
+> Startup takes 30–60 seconds. If `http://<server-ip>:9000` doesn't load right away, check `docker logs sonarqube` — an `AccessDeniedException` or Elasticsearch crash there almost always means the `vm.max_map_count` step above was skipped.
 
 ## Jenkins Setup
 

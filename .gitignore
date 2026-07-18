@@ -1,2 +1,3 @@
 /var/lib/jenkins/secrets/initialAdminPassword
-
+target/
+installation_notes.txt

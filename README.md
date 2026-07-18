@@ -160,7 +160,7 @@ echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 echo "fs.file-max=131072" | sudo tee -a /etc/sysctl.conf
 
 # Run SonarQube (Community Edition)
-docker run -d --name sonarqube -p 9000:9000 sonarqube:lts-community
+docker run -d --name sonarqube --restart unless-stopped -p 9000:9000 sonarqube:lts-community
 
 echo "SonarQube starting up. Access it at http://<server-ip>:9000"
 echo "Default login: admin / admin (you'll be prompted to change it on first login)"
@@ -168,6 +168,12 @@ echo "Default login: admin / admin (you'll be prompted to change it on first log
 After logging in, generate a token under **My Account → Security → Generate Tokens** — this is what gets pasted into the Jenkins SonarQube credential (step 2 below).
 
 > Startup takes 30–60 seconds. If `http://<server-ip>:9000` doesn't load right away, check `docker logs sonarqube` — an `AccessDeniedException` or Elasticsearch crash there almost always means the `vm.max_map_count` step above was skipped.
+
+`--restart unless-stopped` makes Docker bring the container back automatically after a crash or host reboot. If it's ever down and needs a manual nudge:
+```bash
+docker ps -a | grep sonarqube   # check its current status
+docker start sonarqube          # start it back up (container already exists, no need to `run` again)
+```
 
 ## Jenkins Setup
 

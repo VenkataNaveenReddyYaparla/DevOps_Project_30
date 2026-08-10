@@ -175,6 +175,25 @@ docker ps -a | grep sonarqube   # check its current status
 docker start sonarqube          # start it back up (container already exists, no need to `run` again)
 ```
 
+### 4. Expand EC2 Storage (EBS Volume)
+Jenkins + Docker + SonarQube images add up fast — if disk space runs low, increase the EBS volume size in the AWS Console (EC2 → Volumes → select volume → Actions → Modify Volume), then grow the partition and filesystem on the instance to actually use the new space:
+```bash
+# 1. Confirm the kernel sees the new size (compare disk vs partition size)
+lsblk
+
+# 2. Grow the partition to fill the disk (device/partition number from lsblk, e.g. nvme0n1 / 1)
+sudo growpart /dev/nvme0n1 1
+
+# 3. Grow the filesystem to use the new partition space
+df -T /                              # check filesystem type first
+sudo resize2fs /dev/nvme0n1p1        # if ext4 (Ubuntu default)
+# sudo xfs_growfs /                  # if xfs instead (e.g. Amazon Linux)
+
+# 4. Verify
+df -h /
+```
+> Device and partition names vary by instance (`/dev/xvda1` on older instance types, `/dev/nvme0n1p1` on Nitro-based ones) — always check `lsblk` first rather than assuming.
+
 ## Jenkins Setup
 
 ### 1. Configure Tools (**Manage Jenkins → Tools**)

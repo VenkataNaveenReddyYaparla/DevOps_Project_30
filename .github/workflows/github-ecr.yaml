@@ -30,9 +30,9 @@ jobs:
     - name: Tag Image
       run: |
         docker tag myapp:latest \
-        <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/myapp:latest
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/myapp:latest
 
     - name: Push Image
       run: |
         docker push \
-        <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/myapp:latest
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/myapp:latest
